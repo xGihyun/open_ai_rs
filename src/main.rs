@@ -4,7 +4,8 @@ use serde::Serialize;
 use serde::Deserialize;
 use dotenv::dotenv;
 use std::env;
-use std::io;
+use std::io::{stdin, stdout, Write};
+use spinners::{Spinner, Spinners};
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ChatCompletion {
@@ -41,38 +42,55 @@ async fn main() -> Result<(), Error> {
 
     dotenv().ok();
 
-    let rapid_api_key = env::var("RAPID_API_KEY").expect("Missing Rapid API key");
-
-    let mut user_input = String::new();
-
-    io::stdin()
-        .read_line(&mut user_input)
-        .expect("Failed to read user input");
-
     let client = reqwest::Client::new();
-    let res = client
-        .post("https://openai80.p.rapidapi.com/chat/completions")
-        .header("Content-Type", "application/json")
-        .header("X-RapidAPI-Key", rapid_api_key)
-        .header("X-RapidAPI-Host", "openai80.p.rapidapi.com")
-        .json(&json!({
-            "model": "gpt-3.5-turbo",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": user_input
-                }
-            ]
-        }))
-        .send()
-        .await?
-        .text()
-        .await?;
+    let rapid_api_key = env::var("RAPID_API_KEY").expect("Missing Rapid API key");
+    
+    loop{
+        print!("> ");
+        stdout().flush().unwrap();
+        
+        let mut user_input = String::new();
+        
+        stdin()
+            .read_line(&mut user_input)
+            .expect("Failed to read user input");
 
-    let chat_completion: ChatCompletion = serde_json::from_str(&res).unwrap();
+        println!();
 
-    let ai_response = &chat_completion.choices[0].message.content;
+        let mut sp = Spinner::new(Spinners::Dots12, "\t Generating response...".into());
+        let res = client
+            .post("https://openai80.p.rapidapi.com/chat/completions")
+            .header("Content-Type", "application/json")
+            .header("X-RapidAPI-Key", &rapid_api_key)
+            .header("X-RapidAPI-Host", "openai80.p.rapidapi.com")
+            .json(&json!({
+                "model": "gpt-3.5-turbo",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": user_input
+                    }
+                ]
+            }))
+            .send()
+            .await?
+            .text()
+            .await?;
+    
+        let chat_completion: ChatCompletion = serde_json::from_str(&res).unwrap();
 
-    println!("{}", ai_response);
+        sp.stop();
+    
+        let ai_response = &chat_completion.choices[0].message.content;
+        
+        println!("\n");
+        println!("{}", ai_response);
+        println!();
+
+        // break;
+    }
+
+    // Unreachable since loop isn't broken in code
     Ok(())
+
 }
